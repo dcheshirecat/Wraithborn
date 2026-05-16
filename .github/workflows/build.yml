@@ -102,6 +102,13 @@ jobs:
           }
           EOF
 
+          # ── gradle.properties ─────────────────────────
+          cat > gradle.properties << 'EOF'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          org.gradle.jvmargs=-Xmx2048m
+          EOF
+
           # ── AndroidManifest.xml ────────────────────────
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
