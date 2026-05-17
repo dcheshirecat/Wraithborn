@@ -1,0 +1,323 @@
+name: Build Wraithborn APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Scaffold Android project
+        run: |
+          mkdir -p app/src/main/assets
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          mkdir -p app/src/main/res/values
+
+          cp index.html app/src/main/assets/index.html
+
+          # ── settings.gradle ────────────────────────────
+          cat > settings.gradle << 'EOF'
+          pluginManagement {
+            repositories {
+              google()
+              mavenCentral()
+              gradlePluginPortal()
+            }
+          }
+          dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories {
+              google()
+              mavenCentral()
+            }
+          }
+          rootProject.name = "Wraithborn"
+          include ':app'
+          EOF
+
+          # ── root build.gradle ──────────────────────────
+          cat > build.gradle << 'EOF'
+          buildscript {
+            ext { agp_version = '8.2.2' }
+            repositories { google(); mavenCentral() }
+            dependencies {
+              classpath "com.android.tools.build:gradle:$agp_version"
+            }
+          }
+          EOF
+
+          # ── gradle wrapper ─────────────────────────────
+          mkdir -p gradle/wrapper
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+
+          # ── app/build.gradle ───────────────────────────
+          cat > app/build.gradle << 'EOF'
+          plugins {
+            id 'com.android.application'
+          }
+          android {
+            namespace 'com.dcheshirecat.wraithborn'
+            compileSdk 34
+            defaultConfig {
+              applicationId 'com.dcheshirecat.wraithborn'
+              minSdk 26
+              targetSdk 34
+              versionCode 1
+              versionName '1.0.0'
+            }
+            buildTypes {
+              release {
+                minifyEnabled false
+              }
+            }
+            compileOptions {
+              sourceCompatibility JavaVersion.VERSION_17
+              targetCompatibility JavaVersion.VERSION_17
+            }
+          }
+          dependencies {
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          EOF
+
+          # ── gradle.properties ─────────────────────────
+          cat > gradle.properties << 'EOF'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          org.gradle.jvmargs=-Xmx2048m
+          EOF
+
+          # ── AndroidManifest.xml ────────────────────────
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <uses-permission android:name="android.permission.INTERNET"/>
+            <application
+              android:label="Wraithborn"
+              android:icon="@mipmap/ic_launcher"
+              android:theme="@style/AppTheme"
+              android:hardwareAccelerated="true">
+              <activity
+                android:name=".MainActivity"
+                android:exported="true"
+                android:screenOrientation="portrait"
+                android:windowSoftInputMode="adjustResize">
+                <intent-filter>
+                  <action android:name="android.intent.action.MAIN"/>
+                  <category android:name="android.intent.category.LAUNCHER"/>
+                </intent-filter>
+              </activity>
+            </application>
+          </manifest>
+          EOF
+
+          # ── res/values/styles.xml ──────────────────────
+          cat > app/src/main/res/values/styles.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+            <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
+              <item name="android:windowBackground">#0a0612</item>
+              <item name="android:statusBarColor">#0a0612</item>
+              <item name="android:navigationBarColor">#0a0612</item>
+            </style>
+          </resources>
+          EOF
+
+          # ── MainActivity.java ──────────────────────────
+          mkdir -p app/src/main/java/com/dcheshirecat/wraithborn
+          cat > app/src/main/java/com/dcheshirecat/wraithborn/MainActivity.java << 'EOF'
+          package com.dcheshirecat.wraithborn;
+
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import android.view.Window;
+          import android.view.WindowManager;
+          import android.graphics.Color;
+
+          public class MainActivity extends Activity {
+            private WebView webView;
+
+            @Override
+            protected void onCreate(Bundle savedInstanceState) {
+              super.onCreate(savedInstanceState);
+              requestWindowFeature(Window.FEATURE_NO_TITLE);
+              getWindow().setFlags(
+                WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                WindowManager.LayoutParams.FLAG_FULLSCREEN
+              );
+              getWindow().setStatusBarColor(Color.parseColor("#0a0612"));
+              getWindow().setNavigationBarColor(Color.parseColor("#0a0612"));
+
+              webView = new WebView(this);
+              setContentView(webView);
+
+              WebSettings s = webView.getSettings();
+              s.setJavaScriptEnabled(true);
+              s.setDomStorageEnabled(true);
+              s.setAllowFileAccess(true);
+              s.setDatabaseEnabled(true);
+              s.setCacheMode(WebSettings.LOAD_DEFAULT);
+              s.setMediaPlaybackRequiresUserGesture(false);
+
+              webView.setBackgroundColor(Color.parseColor("#0a0612"));
+              webView.setWebViewClient(new WebViewClient());
+              webView.loadUrl("file:///android_asset/index.html");
+            }
+
+            @Override
+            public void onBackPressed() {
+              if (webView.canGoBack()) webView.goBack();
+              else super.onBackPressed();
+            }
+
+            @Override
+            protected void onPause() {
+              super.onPause();
+              webView.onPause();
+            }
+
+            @Override
+            protected void onResume() {
+              super.onResume();
+              webView.onResume();
+            }
+          }
+          EOF
+
+      - name: Generate launcher icon
+        run: |
+          pip install pillow --quiet --break-system-packages
+          python3 - << 'PYEOF'
+          import base64, os, io
+          from PIL import Image
+
+          # Pre-built valid 192x192 RGBA PNG: dark purple circle with gold W
+          B64 = (
+            "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"
+          )
+
+          png_data = base64.b64decode(B64)
+          img_192 = Image.open(io.BytesIO(png_data)).convert("RGBA")
+
+          sizes = {
+            'mdpi': 48, 'hdpi': 72, 'xhdpi': 96,
+            'xxhdpi': 144, 'xxxhdpi': 192
+          }
+          for dpi, sz in sizes.items():
+            path = f'app/src/main/res/mipmap-{dpi}/ic_launcher.png'
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            img = img_192.resize((sz, sz), Image.LANCZOS)
+            img.save(path, 'PNG')
+            print(f'  icon {dpi} ({sz}px) written')
+          PYEOF
+
+      - name: Download Gradle wrapper jar
+        run: |
+          mkdir -p gradle/wrapper
+          curl -sL "https://github.com/gradle/gradle/raw/v8.4.0/gradle/wrapper/gradle-wrapper.jar" \
+            -o gradle/wrapper/gradle-wrapper.jar || \
+          curl -sL "https://raw.githubusercontent.com/gradle/gradle/master/gradle/wrapper/gradle-wrapper.jar" \
+            -o gradle/wrapper/gradle-wrapper.jar || true
+
+          # Fallback: generate wrapper via gradle itself
+          if [ ! -s gradle/wrapper/gradle-wrapper.jar ]; then
+            wget -q https://services.gradle.org/distributions/gradle-8.4-bin.zip -O /tmp/gradle.zip
+            unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+            /tmp/gradle-dist/gradle-8.4/bin/gradle wrapper --gradle-version 8.4 --project-dir .
+          fi
+
+      - name: Make gradlew executable
+        run: |
+          if [ ! -f gradlew ]; then
+            cat > gradlew << 'EOF'
+          #!/bin/sh
+          exec java -jar gradle/wrapper/gradle-wrapper.jar "$@"
+          EOF
+            # Actually generate proper gradlew
+            curl -sL https://raw.githubusercontent.com/gradle/gradle/v8.4.0/gradlew -o gradlew || true
+          fi
+          chmod +x gradlew
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
+      - name: Generate keystore
+        run: |
+          keytool -genkeypair \
+            -alias wraithborn \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 365 \
+            -keystore wraithborn.jks \
+            -storepass wraithborn123 \
+            -keypass wraithborn123 \
+            -dname "CN=Wraithborn, OU=App, O=dcheshirecat, L=Unknown, ST=Unknown, C=US"
+
+      - name: Build APK
+        run: gradle assembleRelease
+
+      - name: Sign APK
+        run: |
+          BUILD_TOOLS=$(ls $ANDROID_HOME/build-tools/ | sort -V | tail -1)
+          $ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner sign \
+            --ks wraithborn.jks \
+            --ks-pass pass:wraithborn123 \
+            --key-pass pass:wraithborn123 \
+            --ks-key-alias wraithborn \
+            --out Wraithborn.apk \
+            app/build/outputs/apk/release/app-release-unsigned.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wraithborn-APK
+          path: Wraithborn.apk
+          retention-days: 30
